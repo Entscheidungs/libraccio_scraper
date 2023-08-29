@@ -1,4 +1,4 @@
-mport logging
+import logging
 import time
 import requests
 from bs4 import BeautifulSoup
@@ -6,10 +6,10 @@ import threading
 from telegram import __version__ as TG_VER,Bot
 import json
 import asyncio
-
+import credentials
 
 _path = "/root/scraper_libraccio/lista_libri.json" 
-#_path = "/home/chris/Documents/scraper_libraccio/lista_libri.json"
+_path = "/home/chris/Documents/scraper_libraccio/lista_libri.json"
 
 try:
 
@@ -83,7 +83,7 @@ async def scraping() -> None:
         bs = BeautifulSoup(url.content,"html.parser")
         stato = bs.find("div",class_="buybox-used")
         return stato != None,link ##ritorna True se il libro c'è usato, False se non c'è usato
-    bot= Bot(token="xxx")
+    bot= Bot(token=credentials.token)
     while True:
         while True:
             try:
@@ -105,6 +105,18 @@ async def scraping() -> None:
         await asyncio.sleep(1)
 def _scraping():
     asyncio.run(scraping())
+async def miei_libri(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        with open(_path,"r") as file:  
+            x = json.load(file)
+        
+        userid = str(update.message.from_user["id"])
+        s = ""
+        for x in x[userid]:
+            s+=x + "\n\n"
+
+        s = s[:-1]
+        await update.message.reply_text("Ecco i libri che hai inserito nel database: \n" + s)
+        
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     """Send a message when the command /help is issued."""
@@ -149,7 +161,7 @@ def main() -> None:
 
     # Create the Application and pass it your bot's token.
 
-    application = Application.builder().token("xxx").build()
+    application = Application.builder().token(credentials.token).build()
 
     # on different commands - answer in Telegram
 
@@ -157,6 +169,7 @@ def main() -> None:
 
     application.add_handler(CommandHandler("start", start))
     
+    application.add_handler(CommandHandler("libri", miei_libri))
 
     application.add_handler(CommandHandler("ricerca", ricerca))
 
