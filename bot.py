@@ -7,10 +7,11 @@ from telegram import __version__ as TG_VER,Bot
 import json
 import asyncio
 import credentials
-import lista_libri
 
 _path = "/root/scraper_libraccio/lista_libri.json" 
 _path = "/home/chris/Documents/scraper_libraccio/lista_libri.json"
+
+
 
 
 try:
@@ -80,6 +81,7 @@ async def ricerca(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("Inserisci il link del libro")
 
 async def scraping() -> None:
+    global lista
     def monitora(link):
         url = requests.get(link)
         bs = BeautifulSoup(url.content,"html.parser")
@@ -87,23 +89,26 @@ async def scraping() -> None:
         return stato != None,link ##ritorna True se il libro c'è usato, False se non c'è usato
     bot= Bot(token=credentials.token)
     while True:
-        for id,lista in lista_libri.file.items():
-            for idx,libro in enumerate(lista):
+        for id,_lista in lista.items():
+            for idx,libro in enumerate(_lista):
                 q = monitora(libro)
                 #print(libro)
                 if q[0]:
                     await bot.sendMessage(id,f"E' stato trovato un libro usato al seguente link: {q[1]}")
-                    del lista_libri.file[id][idx]
+                    del lista[id][idx]
+                    with open(_path,"w") as f:
+                        json.dump(lista,f)
 
         
         await asyncio.sleep(1)
 def _scraping():
     asyncio.run(scraping())
 async def miei_libri(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        
+
+        global lista 
         userid = str(update.message.from_user["id"])
         s = ""
-        for x in lista_libri.file[userid]:
+        for x in lista[userid]:
             s+=x + "\n\n"
 
         s = s[:-1]
@@ -118,8 +123,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     
 
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    global check_inserito
-
+    global check_inserito, lista
     flag = 1
     userid = str(update.message.from_user["id"])
 
@@ -138,12 +142,15 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("Il libro è stato salvato nel database, verrai avvisato non appena sarà disponibile usato")
         #! w+ non si può usare perché il contenuto del file prima viene azzerato e poi viene letto, per cui
 
-        with open(_path,"w") as file:
-            if lista_libri.file.get(userid) == None:
-                lista_libri.file[userid] = []
-            lista_libri.file[userid].append(update.message.text)
+        if lista.get(userid) == None:
+            lista[userid] = []
+        lista[userid].append(update.message.text)
 
-            print(f"Aggiunto {update.message.text}")
+        with open(_path,"w") as f:
+            json.dump(lista,f)
+
+
+        print(f"Aggiunto {update.message.text}")
 def main() -> None:
 
     """Start the bot."""
@@ -175,11 +182,21 @@ def main() -> None:
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
-
+lista = dict()
 def _start(): 
+    global lista
     t1 = threading.Thread(target=_scraping,group=None)
+
+    with open(_path,"r") as f: 
+        lista = json.load(f)
     t1.start()
     main()
 
-_start()
 
+#try: 
+_start()
+#except: 
+    #with open(_path,"w") as f:
+            #json.dump(lista,f)
+
+#se il programma va in errore salva il dizionario nel file json
