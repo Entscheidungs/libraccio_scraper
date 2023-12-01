@@ -1,44 +1,16 @@
-import logging
-import time
-import requests
-from bs4 import BeautifulSoup
-import threading
+import logging,credentials,requests,threading,json,asyncio
+from bs4 import BeautifulSoup 
+
+
 from telegram import __version__ as TG_VER,Bot
-import json
-import asyncio
-import credentials
-
-_path = "/root/scraper_libraccio/lista_libri.json" 
-_path = "/home/chris/Documents/scraper_libraccio/lista_libri.json"
-
-
-
-
-try:
-
-    from telegram import __version_info__
-
-except ImportError:
-
-    __version_info__ = (0, 0, 0, 0, 0)  # type: ignore[assignment]
-
-
-if __version_info__ < (20, 0, 0, "alpha", 1):
-
-    raise RuntimeError(
-
-        f"This example is not compatible with your current PTB version {TG_VER}. To view the "
-
-        f"{TG_VER} version of this example, "
-
-        f"visit https://docs.python-telegram-bot.org/en/v{TG_VER}/examples.html"
-
-    )
 
 from telegram import ForceReply, Update
 
-from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
+from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters, ConversationHandler
 
+
+
+path = "/home/chris/Documents/Programmazione/Python/libraccio/lista.json"
 
 # Enable logging
 
@@ -61,6 +33,8 @@ logger = logging.getLogger(__name__)
 
 # context.
 
+INSERT,SCRAPE = range(2)
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     """Send a message when the command /start is issued."""
@@ -69,88 +43,80 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     await update.message.reply_html(
 
-        rf"Ciao {user.mention_html()}! Benvenuto sul bot non ufficiale di libraccio.it"
+        rf"Hi {user.mention_html()}!",
+
+        reply_markup=ForceReply(selective=True),
+
     )
-    await update.message.reply_text("Questo bot è stato progettato per avvisarti non appena un libro che stai cercando appare usato su libraccio, in modo da essere il primo/a a vederlo.")
-    await update.message.reply_text("Per iniziare a monitorare un libro inserisci il comando /ricerca per poi inserire nel messaggio successivo il link libraccio del libro in questione.")
 
-check_inserito = 0
-async def ricerca(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    global check_inserito
-    check_inserito = 1
-    await update.message.reply_text("Inserisci il link del libro")
-
-async def scraping() -> None:
-    global lista
-    def monitora(link):
-        url = requests.get(link)
-        bs = BeautifulSoup(url.content,"html.parser")
-        stato = bs.find("div",class_="buybox-used")
-        return stato != None,link ##ritorna True se il libro c'è usato, False se non c'è usato
-    bot= Bot(token=credentials.token)
-    while True:
-        for id,_lista in lista.items():
-            for idx,libro in enumerate(_lista):
-                q = monitora(libro)
-                #print(libro)
-                if q[0]:
-                    await bot.sendMessage(id,f"E' stato trovato un libro usato al seguente link: {q[1]}")
-                    del lista[id][idx]
-                    with open(_path,"w") as f:
-                        json.dump(lista,f)
-
-        
-        await asyncio.sleep(1)
-def _scraping():
-    asyncio.run(scraping())
-async def miei_libri(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-
-        global lista 
-        userid = str(update.message.from_user["id"])
-        s = ""
-        for x in lista[userid]:
-            s+=x + "\n\n"
-
-        s = s[:-1]
-        await update.message.reply_text("Ecco i libri che hai inserito nel database: \n" + s)
- 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     """Send a message when the command /help is issued."""
 
     await update.message.reply_text("Help!")
-    
+
+
 
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    global check_inserito, lista
-    flag = 1
+
+    """Echo the user message."""
+
+    await update.message.reply_text(update.message.text)
+
+
+
+async def req(update: Update, context: ContextTypes.DEFAULT_TYPE): # it asks to enter the link of the book
+    await update.message.reply_text("Inserisci il link del libro che vorresti trovare usato\n") #asks for the link to the book 
+    return INSERT
+
+def _scraping():
+    asyncio.run(scraping())
+async def scraping(): #this function scrapes the webpage of libraccio.it searching for the buybox-used div class
+
+    bot= Bot(token=credentials.token)
+    while True:
+       
+        with open(path,"r") as f:
+            jsondict = json.load(f)
+        
+        newdict = {} #the new dict will contain only the books who are not found 
+        for list_of_books in jsondict.keys():
+            newdict[list_of_books] = []
+            for book in jsondict[list_of_books]:
+                url = requests.get(book)
+                bs = BeautifulSoup(url.content,"html.parser")
+                stato = bs.find("div",class_="buybox-used")
+                if stato:
+                   await bot.send_message(text=f"Buone notizie, un libro che stavi cercando è stato trovato usato:\n{book}",chat_id=list_of_books)
+                else:
+                    newdict[list_of_books].append(book)
+        
+        with open(path,"w") as f:
+            json.dump(newdict,f)
+    
+        await asyncio.sleep(5)
+async def inserting(update: Update, context: ContextTypes.DEFAULT_TYPE): # it asks to enter the link of the book
+    link = update.message.text
+
+
+    with open(path,"r") as f: #the content of the json file is temporaily stored in a dictionary
+        jsondict = json.load(f)
     userid = str(update.message.from_user["id"])
 
-    if check_inserito:
-        check_inserito = 0
+    if not jsondict.get(userid): #if the user didn't insert any book, the user id is store in the json file
+        jsondict[userid] = []
 
-        try: 
-            r = requests.get(update.message.text)
-            if r.status_code != 200:
-                raise Exception
-        except:
-            await update.message.reply_text("Il link inserito non è valido, per favore controlla se hai inserito il link di un libro presente su libraccio.it e reinvialo")
-            check_inserito = 1
-            flag = 0
-            return
-        await update.message.reply_text("Il libro è stato salvato nel database, verrai avvisato non appena sarà disponibile usato")
-        #! w+ non si può usare perché il contenuto del file prima viene azzerato e poi viene letto, per cui
+    #if the book is already saved, the user is informed
+    await update.message.reply_text("Libro già presente nel database") if link in jsondict[userid] else jsondict[userid].append(link)
 
-        if lista.get(userid) == None:
-            lista[userid] = []
-        lista[userid].append(update.message.text)
+    with open(path,"w") as f: #the json file is updated
+        json.dump(jsondict,f)
 
-        with open(_path,"w") as f:
-            json.dump(lista,f)
+    return ConversationHandler.END
 
 
-        print(f"Aggiunto {update.message.text}")
+    
 def main() -> None:
 
     """Start the bot."""
@@ -159,44 +125,22 @@ def main() -> None:
 
     application = Application.builder().token(credentials.token).build()
 
+
     # on different commands - answer in Telegram
 
-    application.add_handler(CommandHandler("start", start))
-
-    application.add_handler(CommandHandler("start", start))
+    conv_handler = ConversationHandler(entry_points=[CommandHandler("start",start),CommandHandler("ricerca",req)],
+    states = {INSERT : [MessageHandler(filters.TEXT, inserting)]},fallbacks=[],)
     
-    application.add_handler(CommandHandler("libri", miei_libri))
-
-    application.add_handler(CommandHandler("ricerca", ricerca))
-
-    application.add_handler(CommandHandler("help", help_command))
 
 
-    # on non command i.e message - echo the message on Telegram
-
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
+    application.add_handler(conv_handler)
 
 
     # Run the bot until the user presses Ctrl-C
 
     application.run_polling(allowed_updates=Update.ALL_TYPES)
+if __name__ == "__main__":
 
-
-lista = dict()
-def _start(): 
-    global lista
-    t1 = threading.Thread(target=_scraping,group=None)
-
-    with open(_path,"r") as f: 
-        lista = json.load(f)
-    t1.start()
+    _thread = threading.Thread(target=_scraping)
+    _thread.start()
     main()
-
-
-#try: 
-_start()
-#except: 
-    #with open(_path,"w") as f:
-            #json.dump(lista,f)
-
-#se il programma va in errore salva il dizionario nel file json
