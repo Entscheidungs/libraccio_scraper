@@ -88,7 +88,10 @@ async def scraping(): #this function scrapes the webpage of libraccio.it searchi
                 bs = BeautifulSoup(url.content,"html.parser")
                 stato = bs.find("div",class_="buybox-used")
                 if stato:
-                   await bot.send_message(text=f"Buone notizie, un libro che stavi cercando è stato trovato usato:\n{book}",chat_id=list_of_books)
+                    try:
+                        await bot.send_message(text=f"Buone notizie, un libro che stavi cercando è stato trovato usato:\n{book}",chat_id=list_of_books)
+                    except:
+                        pass
                 else:
                     newdict[list_of_books].append(book)
         
@@ -108,15 +111,29 @@ async def inserting(update: Update, context: ContextTypes.DEFAULT_TYPE): # it as
         jsondict[userid] = []
 
     #if the book is already saved, the user is informed
-    await update.message.reply_text("Libro già presente nel database") if link in jsondict[userid] else jsondict[userid].append(link)
+    await update.message.reply_text("Libro già presente nel database") if link in jsondict[userid] else (jsondict[userid].append(link),await update.message.reply_text("il libro è stato inserito nel database"))
 
     with open(path,"w") as f: #the json file is updated
         json.dump(jsondict,f)
 
     return ConversationHandler.END
 
-
+async def show_list(update: Update, context: ContextTypes.DEFAULT_TYPE): # it asks to enter the link of the book
+    userid = str(update.message.from_user["id"])
+    with open(path,"r") as f:
+        jsondict = json.load(f)
     
+    msg = ""
+    if jsondict.get(userid):
+        for x in jsondict[userid]:
+            msg+=x
+            msg+="\n\n"
+        await update.message.reply_text(f"Ecco i libri che stai cercando {msg}")
+    else:
+        await update.message.reply_text(f"Non hai inserito nessun libro")
+        
+    
+    return ConversationHandler.END
 def main() -> None:
 
     """Start the bot."""
@@ -128,7 +145,7 @@ def main() -> None:
 
     # on different commands - answer in Telegram
 
-    conv_handler = ConversationHandler(entry_points=[CommandHandler("start",start),CommandHandler("ricerca",req)],
+    conv_handler = ConversationHandler(entry_points=[CommandHandler("start",start),CommandHandler("ricerca",req),CommandHandler("lista_libri",show_list)],
     states = {INSERT : [MessageHandler(filters.TEXT, inserting)]},fallbacks=[],)
     
 
@@ -143,4 +160,7 @@ if __name__ == "__main__":
 
     _thread = threading.Thread(target=_scraping)
     _thread.start()
-    main()
+    while True:
+        try: main()
+        except: main()
+    
