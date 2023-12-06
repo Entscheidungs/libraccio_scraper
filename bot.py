@@ -70,6 +70,29 @@ async def req(update: Update, context: ContextTypes.DEFAULT_TYPE): # it asks to 
     await update.message.reply_text("Inserisci il link del libro che vorresti trovare usato\n") #asks for the link to the book 
     return INSERT
 
+async def inserting(update: Update, context: ContextTypes.DEFAULT_TYPE): # it asks to enter the link of the book
+    link = update.message.text
+
+
+    with open(path,"r") as f: #the content of the json file is temporaily stored in a dictionary
+        jsondict = json.load(f)
+    userid = str(update.message.from_user["id"])
+
+    if not jsondict.get(userid): #if the user didn't insert any book, the user id is store in the json file
+        jsondict[userid] = []
+
+    #if the book is already saved, the user is informed
+    #await update.message.reply_text("Libro già presente nel database") if link in jsondict[userid] else (jsondict[userid].append(link),await update.message.reply_text("il libro è stato inserito nel database"))
+    
+    #if the book is already saved, the user is informed
+    if link in jsondict[userid]: 
+        await update.message.reply_text("Questo libro è già presente nel database")
+    else:
+        jsondict[userid].append(link)
+        with open(path,"w") as f: #the json file is updated
+            json.dump(jsondict,f)
+        await update.message.reply_text("Il libro è stato inserito nel database")
+    return ConversationHandler.END
 def _scraping():
     asyncio.run(scraping())
 async def scraping(): #this function scrapes the webpage of libraccio.it searching for the buybox-used div class
@@ -99,24 +122,6 @@ async def scraping(): #this function scrapes the webpage of libraccio.it searchi
             json.dump(newdict,f)
     
         await asyncio.sleep(5)
-async def inserting(update: Update, context: ContextTypes.DEFAULT_TYPE): # it asks to enter the link of the book
-    link = update.message.text
-
-
-    with open(path,"r") as f: #the content of the json file is temporaily stored in a dictionary
-        jsondict = json.load(f)
-    userid = str(update.message.from_user["id"])
-
-    if not jsondict.get(userid): #if the user didn't insert any book, the user id is store in the json file
-        jsondict[userid] = []
-
-    #if the book is already saved, the user is informed
-    await update.message.reply_text("Libro già presente nel database") if link in jsondict[userid] else (jsondict[userid].append(link),await update.message.reply_text("il libro è stato inserito nel database"))
-
-    with open(path,"w") as f: #the json file is updated
-        json.dump(jsondict,f)
-
-    return ConversationHandler.END
 
 async def show_list(update: Update, context: ContextTypes.DEFAULT_TYPE): # it asks to enter the link of the book
     userid = str(update.message.from_user["id"])
