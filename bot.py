@@ -10,7 +10,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 
 
 
-path = "/home/chris/Documents/Programmazione/Python/libraccio/lista.json"
+path = "xxx"
 
 # Enable logging
 
