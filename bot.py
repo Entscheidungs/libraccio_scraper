@@ -10,7 +10,8 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 
 
 
-path = "xxx"
+path = "/home/chris/Documents/Programmazione/Python/libraccio/lista.json"
+path = "/root/scraper_libraccio/lista.json"
 
 # Enable logging
 
@@ -118,16 +119,15 @@ async def scraping(): #this function scrapes the webpage of libraccio.it searchi
             newdict[userid] = []
             for book in jsondict[userid]:
                 url = requests.get(book)
-
                 bs = BeautifulSoup(url.content,"html.parser")
                 success = bs.find("div",class_="buybox-used")
-                print("ENTRA LIBRO")
                 if success:
-
-                        print("ENTRA LIBRO 1") if "essere" in book else None
+                    try:
                         await bot.send_message(text=f"Buone notizie, un libro che stavi cercando è stato trovato usato:\n{book}",chat_id=userid)
+                    except:
+                        pass
+                        	
                 else:
-                    print("ENTRA LIBRO 2") if "essere" in book else None
                     newdict[userid].append(book)
         with open(path,"w") as f:
             json.dump(newdict,f)
