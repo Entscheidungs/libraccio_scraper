@@ -11,7 +11,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 
 
 path = "/home/chris/Documents/Programmazione/Python/libraccio/lista.json"
-path = "/root/scraper_libraccio/lista.json"
+#path = "/root/scraper_libraccio/lista.json"
 
 # Enable logging
 
@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 # context.
 
-INSERT,SCRAPE, REQ= range(3)
+INSERT,SCRAPE, REQ, LIST = range(4)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
@@ -43,7 +43,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     await update.message.reply_text("Questo bot ti è utile nel caso tu voglia comprare un libro su libraccio.it usato, ma sul sito sia presente solamente nuovo.")
     await update.message.reply_text("Inserendo il comando /ricerca ed inviando poi il link del libro in questione (attenzione, il link deve essere di un libro, non di un autore o altro), lo stato del libro verrà monitorato periodicamente dal bot, che ti avviserà quando sarà disponibile usato.")
-    await update.message.reply_text("Infine puoi visualizzare la lista dei libri che il bot sta monitorando tramite il comando /lista_libri.")
+    await update.message.reply_text("Infine puoi visualizzare la lista dei libri che il bot sta monitorando tramite il comando /miei_libri.")
     await update.message.reply_text("Questo bot è in fase di testing, il creatore si scusa per eventuali malfunzionamenti, per qualsiasi chiarimento siete pregati di contattare @zzeroxchris")
     await update.message.reply_text("Il codice sorgente del bot è inoltre disponibile su github al link https://github.com/Entscheidungs/libraccio_scraper e se ti è tornato utile sei pregato di lasciare una star!")
 
@@ -64,22 +64,23 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 
-async def req(update: Update, context: ContextTypes.DEFAULT_TYPE): # it asks to enter the link of the book
+async def inserting_book(update: Update, context: ContextTypes.DEFAULT_TYPE): # it asks to enter the link of the book
     await update.message.reply_text("Inserisci il link del libro che vorresti trovare usato\n") #asks for the link to the book 
     return INSERT
 
-async def inserting(update: Update, context: ContextTypes.DEFAULT_TYPE): # it asks to enter the link of the book
+async def inserting(update: Update, context: ContextTypes.DEFAULT_TYPE): # it asks to enter the link of the book 
     link = update.message.text
-
     try:
-        x = requests.get(link)
-        if "https://www.libraccio.it/libro/" not in link:
+        x = requests.get(link).text
+        if "Errore generico" in x:
             raise Exception
+        link = update.message.text
     except:
         await update.message.reply_text("Il link inserito non risulta valido, sicuro che sia il link completo di un libro?")
         await update.message.reply_text("Inserisci il link del libro che vorresti trovare usato\n") 
         return INSERT
-    
+
+  
     obj.acquire()
     with open(path,"r") as f: #the content of the json file is temporaily stored in a dictionary
         jsondict = json.load(f)
@@ -98,8 +99,9 @@ async def inserting(update: Update, context: ContextTypes.DEFAULT_TYPE): # it as
         jsondict[userid].append(link)
         with open(path,"w") as f: #the json file is updated
             json.dump(jsondict,f)
-            obj.release()
         await update.message.reply_text("Il libro è stato inserito nel database")
+    
+    obj.release()
     return ConversationHandler.END
 def _scraping():
     asyncio.run(scraping())
@@ -107,7 +109,6 @@ def _scraping():
     
     
 async def scraping(): #this function scrapes the webpage of libraccio.it searching for the buybox-used div class
-
     bot= Bot(token=credentials.token)
     while True:
         obj.acquire()
@@ -126,7 +127,6 @@ async def scraping(): #this function scrapes the webpage of libraccio.it searchi
                         await bot.send_message(text=f"Buone notizie, un libro che stavi cercando è stato trovato usato:\n{book}",chat_id=userid)
                     except:
                         pass
-                        	
                 else:
                     newdict[userid].append(book)
         with open(path,"w") as f:
@@ -151,7 +151,6 @@ async def show_list(update: Update, context: ContextTypes.DEFAULT_TYPE): # it as
     else:
         await update.message.reply_text(f"Non hai inserito nessun libro")
         
-    
     return ConversationHandler.END
 def main() -> None:
 
@@ -164,8 +163,10 @@ def main() -> None:
 
     # on different commands - answer in Telegram
 
-    conv_handler = ConversationHandler(entry_points=[CommandHandler("start",start),CommandHandler("ricerca",req),CommandHandler("lista_libri",show_list)],
-    states = {INSERT : [MessageHandler(filters.TEXT, inserting)], REQ : [CommandHandler("ricerca",req)]},fallbacks=[],)
+    conv_handler = ConversationHandler(entry_points=[CommandHandler("start",start),CommandHandler("ricerca",inserting_book),CommandHandler("lista_libri",show_list),CommandHandler("miei_libri",show_list)],
+    states = {INSERT : [MessageHandler(filters.TEXT, inserting)], REQ : [CommandHandler("ricerca",inserting_book)]},fallbacks=[],)
+
+
     
 
 
@@ -184,4 +185,3 @@ if __name__ == "__main__":
     while True:
         try: main()
         except: main()
-    
